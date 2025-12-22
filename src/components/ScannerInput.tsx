@@ -6,9 +6,10 @@ interface ScannerInputProps {
   onScan: (upc: string) => ScanResult | null;
   lastScan: ScanResult | null;
   disabled?: boolean;
+  onScanComplete?: (result: ScanResult) => void;
 }
 
-export function ScannerInput({ onScan, lastScan, disabled }: ScannerInputProps) {
+export function ScannerInput({ onScan, lastScan, disabled, onScanComplete }: ScannerInputProps) {
   const [value, setValue] = useState('');
   const [isPulsing, setIsPulsing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,12 +28,15 @@ export function ScannerInput({ onScan, lastScan, disabled }: ScannerInputProps) 
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && value.trim()) {
-      onScan(value.trim());
+      const result = onScan(value.trim());
       setValue('');
       setIsPulsing(true);
       setTimeout(() => setIsPulsing(false), 300);
+      if (result && onScanComplete) {
+        onScanComplete(result);
+      }
     }
-  }, [value, onScan]);
+  }, [value, onScan, onScanComplete]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);

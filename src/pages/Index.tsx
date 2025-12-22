@@ -1,11 +1,16 @@
 import { useInventory } from '@/hooks/useInventory';
+import { useSettings } from '@/hooks/useSettings';
+import { useScanSound } from '@/hooks/useScanSound';
 import { CSVUploader } from '@/components/CSVUploader';
 import { ScannerInput } from '@/components/ScannerInput';
 import { StatsPanel } from '@/components/StatsPanel';
 import { InventoryTable } from '@/components/InventoryTable';
 import { ExceptionList } from '@/components/ExceptionList';
+import { SettingsDialog } from '@/components/SettingsDialog';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Trash2, Package } from 'lucide-react';
+import { RotateCcw, Trash2, Package, FileDown } from 'lucide-react';
+import { generateDiscrepancyReport } from '@/utils/generatePDF';
+import { ScanResult } from '@/types/inventory';
 
 const Index = () => {
   const {
@@ -19,6 +24,28 @@ const Index = () => {
     resetScans,
     clearAll,
   } = useInventory();
+
+  const {
+    settings,
+    toggleSound,
+    updateNocoDB,
+    clearNocoDB,
+    isNocoDBConfigured,
+  } = useSettings();
+
+  const { playSuccess, playException } = useScanSound(settings.soundEnabled);
+
+  const handleScanComplete = (result: ScanResult) => {
+    if (result.type === 'matched') {
+      playSuccess();
+    } else {
+      playException();
+    }
+  };
+
+  const handleExportPDF = () => {
+    generateDiscrepancyReport(inventoryItems, exceptionItems);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,28 +63,47 @@ const Index = () => {
               </div>
             </div>
 
-            {isLoaded && (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resetScans}
-                  title="Reset all scan counts"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Reset Scans
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearAll}
-                  title="Clear inventory and start over"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Clear All
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              <SettingsDialog
+                settings={settings}
+                onToggleSound={toggleSound}
+                onUpdateNocoDB={updateNocoDB}
+                onClearNocoDB={clearNocoDB}
+                isNocoDBConfigured={isNocoDBConfigured}
+              />
+
+              {isLoaded && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPDF}
+                    title="Export discrepancies & exceptions to PDF"
+                  >
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetScans}
+                    title="Reset all scan counts"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset Scans
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearAll}
+                    title="Clear inventory and start over"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -75,6 +121,7 @@ const Index = () => {
             onScan={scanUPC}
             lastScan={lastScan}
             disabled={!isLoaded}
+            onScanComplete={handleScanComplete}
           />
         </div>
 
@@ -92,6 +139,9 @@ const Index = () => {
       <footer className="border-t border-border mt-8 py-4">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           Inventory Reconciliation Tool • Optimized for barcode scanning efficiency
+          {!isNocoDBConfigured && (
+            <span className="ml-2 text-amber-400">• Using browser session storage</span>
+          )}
         </div>
       </footer>
     </div>
