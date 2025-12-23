@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Download } from 'lucide-react';
-import { ExceptionItem } from '@/types/inventory';
+import { ExceptionItem, InventoryMode } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -13,16 +13,22 @@ import {
 
 interface ExceptionListProps {
   items: ExceptionItem[];
+  mode: InventoryMode;
 }
 
-export function ExceptionList({ items }: ExceptionListProps) {
+export function ExceptionList({ items, mode }: ExceptionListProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const isSerialMode = mode === 'serialized';
 
   const exportExceptions = () => {
     if (items.length === 0) return;
 
+    const header = isSerialMode 
+      ? 'Serial Number,Scanned Quantity,First Scanned,Last Scanned'
+      : 'UPC,Scanned Quantity,First Scanned,Last Scanned';
+    
     const csv = [
-      'UPC,Scanned Quantity,First Scanned,Last Scanned',
+      header,
       ...items.map(
         item =>
           `${item.upc},${item.scannedQuantity},${item.firstScanned.toISOString()},${item.lastScanned.toISOString()}`
@@ -33,7 +39,7 @@ export function ExceptionList({ items }: ExceptionListProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `exceptions_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `exceptions_${isSerialMode ? 'serials' : 'upcs'}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -62,7 +68,10 @@ export function ExceptionList({ items }: ExceptionListProps) {
       {isExpanded && (
         <>
           <p className="text-sm text-muted-foreground mt-2 mb-4">
-            These UPCs were scanned but not found in the inventory CSV
+            {isSerialMode 
+              ? 'These serial numbers were scanned but not found in the inventory CSV'
+              : 'These UPCs were scanned but not found in the inventory CSV'
+            }
           </p>
 
           <div className="rounded-lg border border-destructive/30 overflow-hidden mb-4">
@@ -70,7 +79,7 @@ export function ExceptionList({ items }: ExceptionListProps) {
               <Table>
                 <TableHeader className="sticky top-0 bg-card">
                   <TableRow>
-                    <TableHead>UPC</TableHead>
+                    <TableHead>{isSerialMode ? 'Serial Number' : 'UPC'}</TableHead>
                     <TableHead className="text-right">Count</TableHead>
                     <TableHead className="text-right">Last Scanned</TableHead>
                   </TableRow>

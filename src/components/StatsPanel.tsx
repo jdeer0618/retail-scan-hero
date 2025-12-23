@@ -1,12 +1,44 @@
-import { Package, CheckCircle, AlertTriangle, XCircle, Hash } from 'lucide-react';
-import { ReconciliationStats } from '@/types/inventory';
+import { Package, CheckCircle, AlertTriangle, XCircle, Hash, Clock } from 'lucide-react';
+import { ReconciliationStats, InventoryMode } from '@/types/inventory';
 
 interface StatsPanelProps {
   stats: ReconciliationStats;
+  mode: InventoryMode;
 }
 
-export function StatsPanel({ stats }: StatsPanelProps) {
-  const statItems = [
+export function StatsPanel({ stats, mode }: StatsPanelProps) {
+  const isSerialMode = mode === 'serialized';
+
+  const statItems = isSerialMode ? [
+    {
+      label: 'Total Serials',
+      value: stats.totalExpectedItems,
+      icon: Package,
+      color: 'text-foreground',
+      bgColor: 'bg-secondary',
+    },
+    {
+      label: 'Scanned',
+      value: stats.totalScannedItems,
+      icon: CheckCircle,
+      color: 'text-primary',
+      bgColor: 'bg-primary/20',
+    },
+    {
+      label: 'Not Scanned',
+      value: stats.notScannedItems || 0,
+      icon: Clock,
+      color: 'text-accent',
+      bgColor: 'bg-accent/20',
+    },
+    {
+      label: 'Exceptions',
+      value: stats.exceptionItems,
+      icon: XCircle,
+      color: 'text-destructive',
+      bgColor: 'bg-destructive/20',
+    },
+  ] : [
     {
       label: 'Total Items',
       value: stats.totalExpectedItems,
@@ -45,7 +77,7 @@ export function StatsPanel({ stats }: StatsPanelProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className={`grid grid-cols-2 ${isSerialMode ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3`}>
       {statItems.map((stat) => (
         <div key={stat.label} className="stat-card">
           <div className="flex items-center gap-2 mb-2">
