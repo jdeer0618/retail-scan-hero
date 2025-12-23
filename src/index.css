@@ -115,6 +115,10 @@
     @apply text-destructive bg-destructive/10 border-destructive/30;
   }
 
+  .status-warning {
+    @apply text-accent bg-accent/10 border-accent/30;
+  }
+
   .pulse-scan {
     animation: pulse-green 0.3s ease-out;
   }
