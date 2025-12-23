@@ -11,11 +11,19 @@ export function useInventory() {
 
   // Detect inventory type based on CSV headers
   const detectMode = useCallback((headers: string[]): InventoryMode => {
-    const lowerHeaders = headers.map(h => h.toLowerCase());
-    // Check for serialized inventory markers
-    if (lowerHeaders.some(h => h.includes('serial number') || h.includes('boundbook'))) {
+    const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+    
+    // Serialized inventory has these EXACT headers: "Boundbook ID", "Serial Number", "Boundbook"
+    // Check for the presence of "boundbook id" as the definitive marker for serialized inventory
+    const hasBoundBookId = lowerHeaders.some(h => h === 'boundbook id');
+    const hasSerialNumberColumn = lowerHeaders.some(h => h === 'serial number');
+    
+    // Only detect as serialized if we have BOTH boundbook id AND serial number columns
+    // This distinguishes from UPC inventory which may have "Item has Serial Number" (different header)
+    if (hasBoundBookId && hasSerialNumberColumn) {
       return 'serialized';
     }
+    
     return 'upc';
   }, []);
 
