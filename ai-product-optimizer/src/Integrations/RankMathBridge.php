@@ -36,11 +36,11 @@ class RankMathBridge {
 			return;
 		}
 
-		if ( ! (bool) get_option( 'aipo_rankmath_bridge_enabled', true ) ) {
+		if ( ! (bool) get_option( 'aipo_rank_math_bridge_enabled', true ) ) {
 			return;
 		}
 
-		$override = (bool) get_option( 'aipo_rankmath_override_existing', false );
+		$override = (bool) get_option( 'aipo_rank_math_override_existing', false );
 
 		foreach ( self::FIELD_MAP as $ai_key => $rm_key ) {
 			$ai_value = get_post_meta( $product_id, $ai_key, true );

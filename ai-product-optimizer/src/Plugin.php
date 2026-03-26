@@ -18,6 +18,7 @@ use AIProductOptimizer\Admin\OnboardingWizard;
 use AIProductOptimizer\Admin\ProductMetaBox;
 use AIProductOptimizer\Admin\SettingsPage;
 use AIProductOptimizer\Api\RestController;
+use AIProductOptimizer\Cache\CacheManager;
 use AIProductOptimizer\Cli\CliCommands;
 use AIProductOptimizer\Integrations\SearchBoost;
 use AIProductOptimizer\Queue\QueueManager;
@@ -203,6 +204,12 @@ final class Plugin {
 		$search_boost = new SearchBoost();
 		$search_boost->register( $this->loader );
 
+		// Auto-generate on product publish / update.
+		$this->loader->add_action( 'transition_post_status', $this, 'maybe_auto_generate', 10, 3 );
+
+		// Invalidate the AI cache when product content changes.
+		$this->loader->add_action( 'save_post_product', $this, 'maybe_invalidate_cache', 20, 1 );
+
 		// WP-CLI commands.
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			CliCommands::register();
@@ -215,5 +222,54 @@ final class Plugin {
 		 * @param Loader $loader The plugin hook loader.
 		 */
 		do_action( 'aipo_init', $this->loader );
+	}
+
+	/**
+	 * Enqueue a full generation package when a product transitions to "publish"
+	 * and the auto-generate-on-publish option is enabled.
+	 *
+	 * @param string   $new_status New post status.
+	 * @param string   $old_status Old post status.
+	 * @param \WP_Post $post       Post object.
+	 * @return void
+	 */
+	public function maybe_auto_generate( string $new_status, string $old_status, \WP_Post $post ): void {
+		if ( 'product' !== $post->post_type ) {
+			return;
+		}
+
+		if ( 'publish' !== $new_status || 'publish' === $old_status ) {
+			return;
+		}
+
+		if ( ! (bool) get_option( 'aipo_auto_generate_on_publish', false ) ) {
+			return;
+		}
+
+		$tasks = array_filter( array(
+			get_option( 'aipo_auto_task_name',            true  ) ? 'name'            : null,
+			get_option( 'aipo_auto_task_short_desc',      true  ) ? 'short_desc'      : null,
+			get_option( 'aipo_auto_task_long_desc',       true  ) ? 'long_desc'       : null,
+			get_option( 'aipo_auto_task_seo_package',     true  ) ? 'seo_package'     : null,
+			get_option( 'aipo_auto_task_search_keywords', true  ) ? 'search_keywords' : null,
+			get_option( 'aipo_auto_task_alt_text',        false ) ? 'alt_text'        : null,
+		) );
+
+		if ( empty( $tasks ) ) {
+			return;
+		}
+
+		( new QueueManager() )->enqueue_batch( array( $post->ID ), array_values( $tasks ) );
+	}
+
+	/**
+	 * Invalidate the AI content cache when a product is saved so stale
+	 * cache entries are not returned after manual content edits.
+	 *
+	 * @param int $post_id Product post ID.
+	 * @return void
+	 */
+	public function maybe_invalidate_cache( int $post_id ): void {
+		( new CacheManager() )->invalidate_product( $post_id );
 	}
 }

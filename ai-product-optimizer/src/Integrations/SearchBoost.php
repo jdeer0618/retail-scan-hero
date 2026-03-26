@@ -30,6 +30,9 @@ class SearchBoost {
 	public function register( Loader $loader ): void {
 		$loader->add_filter( 'pre_get_posts', $this, 'boost_wp_search', 10, 1 );
 		$loader->add_filter( 'woocommerce_product_query', $this, 'boost_product_query', 10, 1 );
+
+		// Prevent duplicate posts when the meta_query OR clause matches multiple postmeta rows.
+		$loader->add_filter( 'posts_distinct', $this, 'add_distinct', 10, 2 );
 	}
 
 	/**
@@ -91,6 +94,21 @@ class SearchBoost {
 	 */
 	public function boost_product_query( \WP_Query $query ): void {
 		$this->boost_wp_search( $query );
+	}
+
+	/**
+	 * Add DISTINCT to the SELECT clause for boosted queries to eliminate
+	 * duplicate posts when a product has multiple matching postmeta rows.
+	 *
+	 * @param string    $distinct Current DISTINCT clause.
+	 * @param \WP_Query $query    The current query.
+	 * @return string
+	 */
+	public function add_distinct( string $distinct, \WP_Query $query ): string {
+		if ( $this->should_boost( $query ) ) {
+			return 'DISTINCT';
+		}
+		return $distinct;
 	}
 
 	/**

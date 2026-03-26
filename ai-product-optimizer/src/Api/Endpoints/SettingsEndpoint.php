@@ -2,6 +2,11 @@
 /**
  * GET  /wp-json/aipo/v1/settings
  * POST /wp-json/aipo/v1/settings
+ * POST /wp-json/aipo/v1/settings/flush-cache
+ *
+ * Uses a flat-key contract that maps 1:1 with the React admin UI.
+ * Provider API keys are encrypted via KeyEncryption before storage and
+ * are never returned in responses — only a boolean `has_key` flag per provider.
  *
  * @package AIProductOptimizer\Api\Endpoints
  */
@@ -11,6 +16,7 @@ declare( strict_types=1 );
 namespace AIProductOptimizer\Api\Endpoints;
 
 use AIProductOptimizer\Api\RestController;
+use AIProductOptimizer\Cache\CacheManager;
 use AIProductOptimizer\Security\KeyEncryption;
 
 /**
@@ -19,42 +25,54 @@ use AIProductOptimizer\Security\KeyEncryption;
 class SettingsEndpoint {
 
 	/**
-	 * Option keys that are safe to expose via the GET endpoint (no sensitive data).
+	 * Simple scalar option keys exposed directly via GET / accepted via POST.
 	 *
 	 * @var string[]
 	 */
-	private const READABLE_KEYS = array(
+	private const SCALAR_KEYS = array(
+		'aipo_enabled',
+		'aipo_onboarding_complete',
 		'aipo_active_provider',
 		'aipo_fallback_provider',
-		'aipo_task_models',
-		'aipo_brand_voice',
-		'aipo_default_tone',
-		'aipo_custom_tone',
-		'aipo_output_length',
-		'aipo_custom_word_count',
-		'aipo_prompt_templates',
 		'aipo_name_max_chars',
-		'aipo_name_variants',
-		'aipo_brand_affix',
 		'aipo_search_keyword_count',
-		'aipo_auto_generate_on_publish',
-		'aipo_auto_generate_types',
-		'aipo_schedule_enabled',
-		'aipo_schedule_cron',
-		'aipo_schedule_offset_hours',
-		'aipo_exclude_categories',
-		'aipo_regenerate_after_days',
-		'aipo_cache_ttl_days',
-		'aipo_queue_concurrency',
-		'aipo_yoast_bridge_enabled',
-		'aipo_rankmath_bridge_enabled',
-		'aipo_yoast_override_existing',
-		'aipo_rankmath_override_existing',
+		'aipo_alt_text_auto_apply',
 		'aipo_search_boost_enabled',
+		'aipo_prompt_name',
+		'aipo_prompt_short_desc',
+		'aipo_prompt_long_desc',
+		'aipo_prompt_seo_package',
+		'aipo_prompt_search_keywords',
+		'aipo_prompt_alt_text',
+		'aipo_cron_schedule',
+		'aipo_batch_size',
+		'aipo_stale_threshold_days',
+		'aipo_skip_unchanged',
+		'aipo_auto_generate_on_publish',
+		'aipo_auto_task_name',
+		'aipo_auto_task_short_desc',
+		'aipo_auto_task_long_desc',
+		'aipo_auto_task_seo_package',
+		'aipo_auto_task_search_keywords',
+		'aipo_auto_task_alt_text',
+		'aipo_cache_ttl',
 		'aipo_rate_limit_per_minute',
+		'aipo_circuit_breaker_threshold',
+		'aipo_yoast_bridge_enabled',
+		'aipo_yoast_override_existing',
+		'aipo_rank_math_bridge_enabled',
+		'aipo_rank_math_override_existing',
+		'aipo_debug_logging',
 		'aipo_log_retention_days',
-		'aipo_onboarding_complete',
+		'aipo_delete_data_on_uninstall',
 	);
+
+	/** @var string[] */
+	private const PROVIDER_SLUGS = array(
+		'openai', 'anthropic', 'gemini', 'grok', 'ollama',
+	);
+
+	// -----------------------------------------------------------------------
 
 	public function register(): void {
 		register_rest_route(
@@ -73,72 +91,120 @@ class SettingsEndpoint {
 				),
 			)
 		);
+
+		register_rest_route(
+			RestController::NAMESPACE,
+			'/settings/flush-cache',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'flush_cache' ),
+				'permission_callback' => array( $this, 'check_admin_permission' ),
+			)
+		);
 	}
 
-	public function get_settings( \WP_REST_Request $request ): \WP_REST_Response {
-		$settings = array();
-		foreach ( self::READABLE_KEYS as $key ) {
-			$settings[ $key ] = get_option( $key );
+	/**
+	 * Return all settings as a flat JSON object. API keys are never returned.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function get_settings(): \WP_REST_Response {
+		$response = array();
+
+		foreach ( self::SCALAR_KEYS as $key ) {
+			$response[ $key ] = get_option( $key );
 		}
 
-		// Add masked API key indicators (last 4 chars only).
-		$providers    = (array) get_option( 'aipo_providers', array() );
-		$provider_info = array();
-		foreach ( $providers as $slug => $config ) {
-			$provider_info[ $slug ] = array(
-				'has_key'       => ! empty( $config['api_key_enc'] ),
-				'key_masked'    => empty( $config['api_key_enc'] ) ? '' : '••••' . substr( $slug, -4 ),
-				'endpoint'      => $config['endpoint'] ?? '',
-				'model'         => $config['model'] ?? '',
-			);
+		// Provider info: expose per-provider has_key + config as flat keys.
+		$providers_blob = (array) get_option( 'aipo_providers', array() );
+		foreach ( self::PROVIDER_SLUGS as $slug ) {
+			$config = $providers_blob[ $slug ] ?? array();
+			$response[ "aipo_provider_{$slug}_has_key" ]  = ! empty( $config['api_key_enc'] );
+			$response[ "aipo_provider_{$slug}_model" ]    = $config['model'] ?? '';
+			$response[ "aipo_provider_{$slug}_endpoint" ] = $config['endpoint'] ?? '';
 		}
-		$settings['providers'] = $provider_info;
 
-		return new \WP_REST_Response( $settings, 200 );
+		return new \WP_REST_Response( $response, 200 );
 	}
 
+	/**
+	 * Persist settings. Handles encrypted API keys inline.
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
 	public function update_settings( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		$body = $request->get_json_params();
 
 		if ( ! is_array( $body ) ) {
-			return new \WP_Error( 'aipo_invalid_body', __( 'Invalid request body.', 'ai-product-optimizer' ), array( 'status' => 400 ) );
+			return new \WP_Error(
+				'aipo_invalid_body',
+				__( 'Invalid request body.', 'ai-product-optimizer' ),
+				array( 'status' => 400 )
+			);
 		}
 
-		// Handle API key updates separately (encrypt before storing).
-		if ( isset( $body['provider_key'] ) && is_array( $body['provider_key'] ) ) {
-			$providers = (array) get_option( 'aipo_providers', array() );
-			foreach ( $body['provider_key'] as $slug => $raw_key ) {
-				$slug = sanitize_key( $slug );
-				if ( ! empty( $raw_key ) ) {
-					$providers[ $slug ]['api_key_enc'] = KeyEncryption::encrypt( sanitize_text_field( $raw_key ) );
+		$providers_blob  = (array) get_option( 'aipo_providers', array() );
+		$providers_dirty = false;
+		$allowed_scalar  = array_flip( self::SCALAR_KEYS );
+
+		foreach ( $body as $key => $value ) {
+			$matched = false;
+
+			foreach ( self::PROVIDER_SLUGS as $slug ) {
+				if ( $key === "aipo_provider_{$slug}_key" ) {
+					$raw = sanitize_text_field( (string) $value );
+					if ( '' !== $raw ) {
+						$providers_blob[ $slug ]['api_key_enc'] = KeyEncryption::encrypt( $raw );
+						$providers_dirty = true;
+					}
+					$matched = true;
+					break;
+				}
+
+				if ( $key === "aipo_provider_{$slug}_model" ) {
+					$providers_blob[ $slug ]['model'] = sanitize_text_field( (string) $value );
+					$providers_dirty = true;
+					$matched = true;
+					break;
+				}
+
+				if ( $key === "aipo_provider_{$slug}_endpoint" ) {
+					$providers_blob[ $slug ]['endpoint'] = esc_url_raw( (string) $value );
+					$providers_dirty = true;
+					$matched = true;
+					break;
 				}
 			}
-			update_option( 'aipo_providers', $providers, false );
-			unset( $body['provider_key'] );
+
+			if ( ! $matched && isset( $allowed_scalar[ $key ] ) ) {
+				update_option( $key, $value, false );
+			}
 		}
 
-		// Handle provider endpoint/model updates.
-		if ( isset( $body['provider_config'] ) && is_array( $body['provider_config'] ) ) {
-			$providers = (array) get_option( 'aipo_providers', array() );
-			foreach ( $body['provider_config'] as $slug => $config ) {
-				$slug = sanitize_key( $slug );
-				$providers[ $slug ]['endpoint'] = esc_url_raw( $config['endpoint'] ?? '' );
-				$providers[ $slug ]['model']    = sanitize_text_field( $config['model'] ?? '' );
-			}
-			update_option( 'aipo_providers', $providers, false );
-			unset( $body['provider_config'] );
-		}
-
-		// Update remaining whitelisted settings.
-		$allowed = array_flip( self::READABLE_KEYS );
-		foreach ( $body as $key => $value ) {
-			if ( ! isset( $allowed[ $key ] ) ) {
-				continue;
-			}
-			update_option( $key, $value, false );
+		if ( $providers_dirty ) {
+			update_option( 'aipo_providers', $providers_blob, false );
 		}
 
 		return new \WP_REST_Response( array( 'updated' => true ), 200 );
+	}
+
+	/**
+	 * Flush all AI content cache entries.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function flush_cache(): \WP_REST_Response {
+		$cache   = new CacheManager();
+		$deleted = $cache->flush_all();
+
+		return new \WP_REST_Response(
+			array(
+				'flushed' => true,
+				'deleted' => $deleted,
+			),
+			200
+		);
 	}
 
 	public function check_permission(): bool|\WP_Error {

@@ -122,10 +122,35 @@ class CacheManager {
 	/**
 	 * Return the configured TTL in seconds.
 	 *
+	 * Reads aipo_cache_ttl (seconds; default 86400 = 24 h).
+	 *
 	 * @return int
 	 */
 	private function ttl_seconds(): int {
-		$days = (int) get_option( 'aipo_cache_ttl_days', 7 );
-		return max( 1, $days ) * DAY_IN_SECONDS;
+		return max( 60, (int) get_option( 'aipo_cache_ttl', DAY_IN_SECONDS ) );
+	}
+
+	/**
+	 * Flush all AI content cache entries (transients with our prefix).
+	 *
+	 * Object cache entries cannot be reliably enumerated — they expire naturally.
+	 *
+	 * @return int Number of transient rows deleted.
+	 */
+	public function flush_all(): int {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$count = (int) $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+				$wpdb->esc_like( '_transient_' . self::TRANSIENT_PREFIX ) . '%',
+				$wpdb->esc_like( '_transient_timeout_' . self::TRANSIENT_PREFIX ) . '%'
+			)
+		);
+
+		wp_cache_flush_group( self::CACHE_GROUP );
+
+		return absint( $count / 2 ); // Each transient has a value row + timeout row.
 	}
 }

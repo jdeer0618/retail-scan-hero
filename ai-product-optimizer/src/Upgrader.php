@@ -26,7 +26,7 @@ class Upgrader {
 	 * @var array<string, callable>
 	 */
 	private static array $migrations = array(
-		// '1.1.0' => [ self::class, 'migrate_1_1_0' ],
+		'1.0.1' => array( self::class, 'migrate_1_0_1' ),
 	);
 
 	/**
@@ -44,11 +44,41 @@ class Upgrader {
 	}
 
 	// -----------------------------------------------------------------------
-	// Migration methods — add below as needed.
+	// Migration methods
 	// -----------------------------------------------------------------------
 
-	// phpcs:disable
-	// Example:
-	// private static function migrate_1_1_0(): void { /* ... */ }
-	// phpcs:enable
+	/**
+	 * 1.0.1: Rename option keys for consistency with the React UI contract.
+	 *
+	 * - aipo_rankmath_bridge_enabled    → aipo_rank_math_bridge_enabled
+	 * - aipo_rankmath_override_existing → aipo_rank_math_override_existing
+	 * - aipo_cache_ttl_days             → aipo_cache_ttl (seconds)
+	 * - aipo_schedule_cron              → aipo_cron_schedule
+	 * - aipo_regenerate_after_days      → aipo_stale_threshold_days
+	 *
+	 * @return void
+	 */
+	private static function migrate_1_0_1(): void {
+		$renames = array(
+			'aipo_rankmath_bridge_enabled'    => 'aipo_rank_math_bridge_enabled',
+			'aipo_rankmath_override_existing' => 'aipo_rank_math_override_existing',
+			'aipo_schedule_cron'              => 'aipo_cron_schedule',
+			'aipo_regenerate_after_days'      => 'aipo_stale_threshold_days',
+		);
+
+		foreach ( $renames as $old_key => $new_key ) {
+			$old_value = get_option( $old_key );
+			if ( false !== $old_value && false === get_option( $new_key ) ) {
+				update_option( $new_key, $old_value, false );
+			}
+			delete_option( $old_key );
+		}
+
+		// Migrate cache_ttl_days → cache_ttl (seconds).
+		$old_ttl_days = get_option( 'aipo_cache_ttl_days' );
+		if ( false !== $old_ttl_days && false === get_option( 'aipo_cache_ttl' ) ) {
+			update_option( 'aipo_cache_ttl', (int) $old_ttl_days * DAY_IN_SECONDS, false );
+			delete_option( 'aipo_cache_ttl_days' );
+		}
+	}
 }

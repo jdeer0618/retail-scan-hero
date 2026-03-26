@@ -149,40 +149,71 @@ class Activator {
 	 */
 	private static function seed_options(): void {
 		$defaults = array(
-			'aipo_version'                    => AIPO_VERSION,
-			'aipo_onboarding_complete'        => false,
-			'aipo_active_provider'            => 'openai',
-			'aipo_fallback_provider'          => 'ollama',
-			'aipo_providers'                  => array(),
-			'aipo_task_models'                => array(),
-			'aipo_brand_voice'                => '',
-			'aipo_default_tone'               => 'professional',
-			'aipo_custom_tone'                => '',
-			'aipo_output_length'              => 'medium',
-			'aipo_custom_word_count'          => 300,
-			'aipo_prompt_templates'           => array(),
-			'aipo_name_max_chars'             => 70,
-			'aipo_name_variants'              => 3,
-			'aipo_brand_affix'                => '',
-			'aipo_search_keyword_count'       => 20,
-			'aipo_auto_generate_on_publish'   => false,
-			'aipo_auto_generate_types'        => array( 'simple', 'variable' ),
-			'aipo_schedule_enabled'           => false,
-			'aipo_schedule_cron'              => 'daily',
-			'aipo_schedule_offset_hours'      => 2,
-			'aipo_exclude_categories'         => array(),
-			'aipo_regenerate_after_days'      => 0,
-			'aipo_cache_ttl_days'             => 7,
-			'aipo_queue_concurrency'          => 3,
-			'aipo_yoast_bridge_enabled'       => true,
-			'aipo_rankmath_bridge_enabled'    => true,
-			'aipo_yoast_override_existing'    => false,
-			'aipo_rankmath_override_existing' => false,
-			'aipo_search_boost_enabled'       => true,
-			'aipo_rate_limit_per_minute'      => 60,
-			'aipo_circuit_breaker_threshold'  => 10,
-			'aipo_log_retention_days'         => 30,
-			'aipo_delete_data_on_uninstall'   => false,
+			// Core.
+			'aipo_version'                     => AIPO_VERSION,
+			'aipo_enabled'                     => true,
+			'aipo_onboarding_complete'         => false,
+
+			// Provider.
+			'aipo_active_provider'             => 'openai',
+			'aipo_fallback_provider'           => '',
+			'aipo_providers'                   => array(), // Internal: stores encrypted keys + per-provider config.
+
+			// Generation.
+			'aipo_name_max_chars'              => 70,
+			'aipo_name_variants'               => 3,
+			'aipo_search_keyword_count'        => 20,
+			'aipo_alt_text_auto_apply'         => false,
+
+			// Search.
+			'aipo_search_boost_enabled'        => true,
+
+			// Prompts (flat keys, one per task).
+			'aipo_prompt_name'                 => '',
+			'aipo_prompt_short_desc'           => '',
+			'aipo_prompt_long_desc'            => '',
+			'aipo_prompt_seo_package'          => '',
+			'aipo_prompt_search_keywords'      => '',
+			'aipo_prompt_alt_text'             => '',
+
+			// Scheduling.
+			'aipo_cron_schedule'               => 'daily',
+			'aipo_batch_size'                  => 50,
+			'aipo_stale_threshold_days'        => 30,
+			'aipo_skip_unchanged'              => true,
+			'aipo_auto_generate_on_publish'    => false,
+
+			// Per-task auto-generate flags.
+			'aipo_auto_task_name'              => true,
+			'aipo_auto_task_short_desc'        => true,
+			'aipo_auto_task_long_desc'         => true,
+			'aipo_auto_task_seo_package'       => true,
+			'aipo_auto_task_search_keywords'   => true,
+			'aipo_auto_task_alt_text'          => false,
+
+			// Cache.
+			'aipo_cache_ttl'                   => 86400, // seconds.
+
+			// Rate limiting.
+			'aipo_rate_limit_per_minute'       => 60,
+
+			// Circuit breaker.
+			'aipo_circuit_breaker_threshold'   => 10,
+
+			// SEO bridges.
+			'aipo_yoast_bridge_enabled'        => true,
+			'aipo_yoast_override_existing'     => false,
+			'aipo_rank_math_bridge_enabled'    => true,
+			'aipo_rank_math_override_existing' => false,
+
+			// Advanced / debug.
+			'aipo_debug_logging'               => false,
+			'aipo_log_retention_days'          => 30,
+			'aipo_delete_data_on_uninstall'    => false,
+
+			// Legacy keys kept for backwards compat — migrated via Upgrader.
+			'aipo_rankmath_bridge_enabled'     => null,
+			'aipo_rankmath_override_existing'  => null,
 		);
 
 		foreach ( $defaults as $key => $value ) {
