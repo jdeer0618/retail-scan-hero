@@ -1,0 +1,10 @@
+/**
+ * AI Product Optimizer — RTL stylesheet.
+ *
+ * Full RTL styles: Phase 4.
+ */
+
+#aipo-settings-app,
+#aipo-onboarding-app {
+	direction: rtl;
+}

@@ -1,0 +1,30 @@
+parameters:
+    level: 8
+    paths:
+        - src/
+    excludePaths:
+        - vendor/
+        - tests/
+    bootstrapFiles:
+        - tests/stubs/wordpress-stubs.php
+    stubFiles:
+        - tests/stubs/woocommerce.stub
+    treatPhpDocTypesAsCertain: false
+    checkMissingIterableValueType: false
+    # WordPress/WooCommerce globals
+    dynamicConstantNames:
+        - ABSPATH
+        - WPINC
+        - WP_CONTENT_DIR
+        - WP_PLUGIN_DIR
+        - AUTH_KEY
+        - SECURE_AUTH_KEY
+        - SECURE_AUTH_SALT
+        - AIPO_VERSION
+        - AIPO_PLUGIN_FILE
+        - AIPO_PLUGIN_DIR
+        - AIPO_PLUGIN_URL
+        - AIPO_PLUGIN_BASENAME
+
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
