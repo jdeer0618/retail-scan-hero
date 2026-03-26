@@ -1,10 +1,46 @@
 /**
- * AI Product Optimizer — RTL stylesheet.
+ * AI Product Optimizer — RTL overrides.
  *
- * Full RTL styles: Phase 4.
+ * Applied automatically by WordPress when the site is in an RTL locale.
+ * Only directional properties need overriding here; the LTR stylesheet
+ * uses logical properties where possible.
  */
 
 #aipo-settings-app,
 #aipo-onboarding-app {
 	direction: rtl;
+}
+
+.aipo-tab-nav__list {
+	flex-direction: row-reverse;
+}
+
+.aipo-api-key-field__row {
+	flex-direction: row-reverse;
+}
+
+.aipo-provider-list {
+	direction: rtl;
+}
+
+.aipo-settings-header {
+	flex-direction: row-reverse;
+}
+
+.aipo-wpcli-hint {
+	border-left: none;
+	border-right: 4px solid #72aee6;
+}
+
+.aipo-prompt-card__header {
+	flex-direction: row-reverse;
+	text-align: right;
+}
+
+.aipo-task-btn-wrapper {
+	align-items: flex-end;
+}
+
+.aipo-bulk-progress__failed {
+	margin-right: 8px;
 }

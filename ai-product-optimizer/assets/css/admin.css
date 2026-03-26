@@ -1,24 +1,506 @@
 /**
  * AI Product Optimizer — Admin stylesheet.
  *
- * Full styles: Phase 4.
+ * WCAG 2.1 AA compliant. Focus rings, colour-contrast, and motion
+ * preferences respected throughout.
  */
+
+/* ── Reset / Container ────────────────────────────────────────────── */
 
 #aipo-settings-app,
 #aipo-onboarding-app {
-	max-width: 900px;
+	max-width: 960px;
 	margin-top: 20px;
 }
 
-.aipo-settings-wrapper {
-	background: #fff;
-	padding: 24px;
-	border: 1px solid #e0e0e0;
-	border-radius: 4px;
+/* ── Settings Header ──────────────────────────────────────────────── */
+
+.aipo-settings-header {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	margin-bottom: 16px;
 }
+
+.aipo-settings-header__title {
+	font-size: 23px;
+	font-weight: 400;
+	margin: 0;
+}
+
+.aipo-settings-header__version {
+	font-size: 12px;
+	color: #757575;
+}
+
+/* ── Tab Navigation ───────────────────────────────────────────────── */
+
+.aipo-tab-nav {
+	border-bottom: 1px solid #c3c4c7;
+	margin-bottom: 0;
+}
+
+.aipo-tab-nav__list {
+	display: flex;
+	flex-wrap: wrap;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	gap: 0;
+}
+
+.aipo-tab-nav__btn {
+	display: inline-block;
+	padding: 8px 16px;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: #50575e;
+	background: transparent;
+	border: 1px solid transparent;
+	border-bottom: none;
+	border-radius: 3px 3px 0 0;
+	cursor: pointer;
+	transition: color .1s, background .1s;
+	position: relative;
+	bottom: -1px;
+	text-decoration: none;
+}
+
+.aipo-tab-nav__btn:hover {
+	color: #1d2327;
+	background: #f0f0f1;
+}
+
+.aipo-tab-nav__btn--active {
+	color: #1d2327;
+	background: #fff;
+	border-color: #c3c4c7;
+	border-bottom-color: #fff;
+}
+
+.aipo-tab-nav__btn:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+/* ── Tab Panels ───────────────────────────────────────────────────── */
+
+.aipo-tab-panels {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-top: none;
+	padding: 24px 24px 16px;
+}
+
+.aipo-tab-panel h2 {
+	margin-top: 0;
+}
+
+.aipo-tab-panel h3 {
+	border-bottom: 1px solid #eee;
+	padding-bottom: 6px;
+}
+
+/* ── Notices ──────────────────────────────────────────────────────── */
+
+.aipo-notice {
+	margin: 8px 0 16px;
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────── */
+
+.aipo-spinner {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	vertical-align: middle;
+}
+
+.aipo-spinner__ring {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	border: 2px solid rgba(0, 0, 0, .15);
+	border-top-color: #2271b1;
+	border-radius: 50%;
+	animation: aipo-spin .7s linear infinite;
+	flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.aipo-spinner__ring {
+		animation: none;
+		border-top-color: #2271b1;
+	}
+}
+
+@keyframes aipo-spin {
+	to { transform: rotate(360deg); }
+}
+
+/* ── Save Button ──────────────────────────────────────────────────── */
+
+.aipo-save-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.aipo-save-btn--saved {
+	background: #2a9d5c !important;
+	border-color: #2a9d5c !important;
+}
+
+/* ── API Key Field ────────────────────────────────────────────────── */
+
+.aipo-api-key-field {
+	margin-bottom: 16px;
+}
+
+.aipo-api-key-field__label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.aipo-api-key-field__row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.aipo-api-key-field__input {
+	flex: 1;
+	max-width: 400px;
+}
+
+.aipo-api-key-field__test-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.aipo-api-key-field__hint {
+	margin: 4px 0 0;
+}
+
+/* ── Provider Cards ───────────────────────────────────────────────── */
+
+.aipo-provider-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.aipo-provider-card {
+	padding: 16px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #fafafa;
+}
+
+.aipo-provider-card h4 {
+	margin-top: 0;
+	margin-bottom: 12px;
+	font-size: 14px;
+}
+
+/* ── Models ───────────────────────────────────────────────────────── */
+
+.aipo-model-provider-section {
+	margin-bottom: 24px;
+}
+
+.aipo-model-select-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.aipo-per-task-models {
+	margin-top: 8px;
+}
+
+.aipo-per-task-models summary {
+	cursor: pointer;
+	color: #2271b1;
+	font-size: 13px;
+	padding: 4px 0;
+}
+
+.aipo-per-task-table {
+	margin-top: 8px;
+}
+
+/* ── Prompt Cards ─────────────────────────────────────────────────── */
+
+.aipo-prompt-card {
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	margin-bottom: 8px;
+	overflow: hidden;
+}
+
+.aipo-prompt-card__header {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	width: 100%;
+	padding: 12px 16px;
+	background: #f6f7f7;
+	border: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.aipo-prompt-card__header:hover {
+	background: #eee;
+}
+
+.aipo-prompt-card__header:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: -2px;
+}
+
+.aipo-prompt-card__desc {
+	flex: 1;
+	font-size: 12px;
+	color: #757575;
+}
+
+.aipo-prompt-card__chevron {
+	font-size: 10px;
+	color: #757575;
+}
+
+.aipo-prompt-card__body {
+	padding: 16px;
+	background: #fff;
+}
+
+.aipo-prompt-textarea {
+	font-family: monospace;
+	font-size: 12px;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.aipo-prompt-tokens {
+	margin-top: 8px;
+}
+
+.aipo-prompt-reset {
+	margin-top: 8px;
+}
+
+/* ── Checkbox Labels ──────────────────────────────────────────────── */
+
+.aipo-checkbox-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+	cursor: pointer;
+}
+
+/* ── Progress Bar ─────────────────────────────────────────────────── */
+
+.aipo-progress {
+	position: relative;
+	height: 18px;
+	background: #f0f0f1;
+	border-radius: 9px;
+	overflow: hidden;
+	margin: 8px 0;
+}
+
+.aipo-progress__bar {
+	height: 100%;
+	background: #2271b1;
+	border-radius: 9px;
+	transition: width .4s ease;
+}
+
+.aipo-progress--animated .aipo-progress__bar {
+	background: linear-gradient(
+		135deg,
+		#2271b1 25%,
+		#1d6296 25%,
+		#1d6296 50%,
+		#2271b1 50%,
+		#2271b1 75%,
+		#1d6296 75%
+	);
+	background-size: 28px 28px;
+	animation: aipo-stripe .8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.aipo-progress--animated .aipo-progress__bar {
+		animation: none;
+	}
+
+	.aipo-progress__bar {
+		transition: none;
+	}
+}
+
+@keyframes aipo-stripe {
+	from { background-position: 28px 0; }
+	to   { background-position: 0 0; }
+}
+
+.aipo-progress__label {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	font-weight: 600;
+	color: #fff;
+	text-shadow: 0 0 3px rgba(0, 0, 0, .5);
+	pointer-events: none;
+}
+
+/* ── Bulk Progress ────────────────────────────────────────────────── */
+
+.aipo-bulk-progress {
+	margin-top: 8px;
+}
+
+.aipo-bulk-progress__stats {
+	font-size: 13px;
+	margin: 4px 0 8px;
+}
+
+.aipo-bulk-progress__failed {
+	color: #d63638;
+	font-weight: 600;
+}
+
+.aipo-bulk-cancel-btn {
+	margin-top: 4px;
+}
+
+/* ── Meta Box ─────────────────────────────────────────────────────── */
 
 #aipo-product-meta-box .aipo-meta {
 	font-size: 12px;
 	color: #757575;
 	margin-bottom: 12px;
+}
+
+.aipo-meta-box-app {
+	padding: 4px 0;
+}
+
+.aipo-task-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.aipo-task-btn-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.aipo-task-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	justify-content: center;
+}
+
+.aipo-task-status {
+	font-size: 11px;
+	padding: 0 2px;
+}
+
+.aipo-task-status--done {
+	color: #2a9d5c;
+}
+
+.aipo-task-status--error {
+	color: #d63638;
+}
+
+.aipo-generate-all-btn {
+	width: 100%;
+	justify-content: center;
+	margin-top: 4px;
+}
+
+.aipo-divider {
+	margin: 10px 0;
+	border: none;
+	border-top: 1px solid #eee;
+}
+
+/* ── Block Editor Sidebar ─────────────────────────────────────────── */
+
+.aipo-sidebar-task {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.aipo-sidebar-task__btn {
+	flex: 1;
+}
+
+.aipo-sidebar-task__done {
+	color: #2a9d5c;
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.aipo-sidebar-task__error {
+	color: #d63638;
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.aipo-sidebar-generate-all {
+	width: 100%;
+	justify-content: center;
+}
+
+/* ── WP-CLI hint ──────────────────────────────────────────────────── */
+
+.aipo-wpcli-hint {
+	background: #f6f7f7;
+	border-left: 4px solid #72aee6;
+	padding: 12px 16px;
+	margin: 16px 0;
+}
+
+.aipo-code-block {
+	background: #1d2327;
+	color: #b4d5f5;
+	padding: 10px 14px;
+	border-radius: 3px;
+	overflow-x: auto;
+	font-size: 12px;
+	line-height: 1.6;
+	margin: 8px 0 0;
+}
+
+/* ── Settings Loading ─────────────────────────────────────────────── */
+
+.aipo-settings-loading {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 40px 0;
+	font-size: 14px;
+	color: #50575e;
 }
