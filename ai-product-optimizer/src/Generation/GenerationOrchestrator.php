@@ -2,9 +2,12 @@
 /**
  * Generation orchestrator.
  *
- * Coordinates all generation tasks for a single product. Resolves the
- * correct AI provider for each task, calls the PromptBuilder, executes
- * the generation, and persists the results to post meta.
+ * Maintains a registry of all generation tasks and provides a unified
+ * entry-point for running one task or a full package for a product.
+ *
+ * The task registry is extensible via the aipo_registered_tasks filter,
+ * allowing third-party code to add custom generation tasks without
+ * modifying core files.
  *
  * @package AIProductOptimizer\Generation
  */
@@ -13,12 +16,15 @@ declare( strict_types=1 );
 
 namespace AIProductOptimizer\Generation;
 
-use AIProductOptimizer\Cache\CacheManager;
-use AIProductOptimizer\Integrations\RankMathBridge;
-use AIProductOptimizer\Integrations\YoastBridge;
-use AIProductOptimizer\Providers\Contracts\AIProviderInterface;
-use AIProductOptimizer\Providers\ProviderFactory;
-use AIProductOptimizer\Queue\JobLogger;
+use AIProductOptimizer\Exceptions\ProviderException;
+use AIProductOptimizer\Generation\Tasks\Contracts\GenerationTaskInterface;
+use AIProductOptimizer\Generation\Tasks\GenerateAltTextTask;
+use AIProductOptimizer\Generation\Tasks\GenerateLongDescTask;
+use AIProductOptimizer\Generation\Tasks\GenerateNameTask;
+use AIProductOptimizer\Generation\Tasks\GenerateSEOPackageTask;
+use AIProductOptimizer\Generation\Tasks\GenerateSearchKeywordsTask;
+use AIProductOptimizer\Generation\Tasks\GenerateShortDescTask;
+use AIProductOptimizer\Generation\Tasks\TaskResult;
 
 /**
  * Class GenerationOrchestrator
@@ -26,116 +32,129 @@ use AIProductOptimizer\Queue\JobLogger;
 class GenerationOrchestrator {
 
 	/**
-	 * Map of task slug → post meta key(s) for saving results.
+	 * Built-in task registry: slug → FQCN.
 	 *
-	 * @var array<string, string|array<string>>
+	 * @var array<string, class-string<GenerationTaskInterface>>
 	 */
-	private const TASK_META_MAP = array(
-		'name'            => '_ai_optimizer_name',
-		'short_desc'      => '_ai_optimizer_short_desc',
-		'long_desc'       => '_ai_optimizer_long_desc',
-		'seo_package'     => array(
-			'seo_title'          => '_ai_optimizer_seo_title',
-			'meta_description'   => '_ai_optimizer_meta_desc',
-			'focus_keyword'      => '_ai_optimizer_focus_kw',
-			'secondary_keywords' => '_ai_optimizer_secondary_kws',
-			'og_title'           => '_ai_optimizer_og_title',
-			'og_description'     => '_ai_optimizer_og_desc',
-			'schema_hints'       => '_ai_optimizer_schema_hints',
-		),
-		'search_keywords' => '_ai_search_keywords',
-		'alt_text'        => '_ai_optimizer_alt_texts',
+	private const BUILT_IN_TASKS = array(
+		'name'            => GenerateNameTask::class,
+		'short_desc'      => GenerateShortDescTask::class,
+		'long_desc'       => GenerateLongDescTask::class,
+		'seo_package'     => GenerateSEOPackageTask::class,
+		'search_keywords' => GenerateSearchKeywordsTask::class,
+		'alt_text'        => GenerateAltTextTask::class,
 	);
 
-	private PromptBuilder $prompt_builder;
-	private CacheManager $cache;
-	private ContentHasher $hasher;
-	private JobLogger $logger;
+	/**
+	 * Task instance cache (instantiated on demand).
+	 *
+	 * @var array<string, GenerationTaskInterface>
+	 */
+	private array $task_instances = array();
 
-	public function __construct() {
-		$this->prompt_builder = new PromptBuilder();
-		$this->cache          = new CacheManager();
-		$this->hasher         = new ContentHasher();
-		$this->logger         = new JobLogger();
-	}
+	// -----------------------------------------------------------------------
+	// Public API
+	// -----------------------------------------------------------------------
 
 	/**
-	 * Run a single generation task for a product and persist results.
+	 * Run a single generation task for a product.
 	 *
 	 * @param int    $product_id Product ID.
-	 * @param string $task_slug  Task identifier.
-	 * @return array{provider: string, model: string, tokens_used: int|null}
-	 * @throws \AIProductOptimizer\Exceptions\ProviderException On generation failure.
+	 * @param string $task_slug  Task identifier (must be registered).
+	 * @return TaskResult
+	 * @throws \InvalidArgumentException   If task slug is unknown.
+	 * @throws ProviderException           If the AI provider fails.
 	 */
-	public function run_task( int $product_id, string $task_slug ): array {
-		$provider = ProviderFactory::for_task( $task_slug );
-		$prompt   = $this->prompt_builder->build( $task_slug, $product_id );
-
-		// Check cache first.
-		$hash      = $this->hasher->compute( $product_id );
-		$cache_key = $this->cache->build_key( $product_id, $task_slug, $hash );
-		$cached    = $this->cache->get( $cache_key );
-
-		if ( false !== $cached ) {
-			$this->save_task_result( $product_id, $task_slug, (string) $cached );
-			return array( 'provider' => 'cache', 'model' => 'cache', 'tokens_used' => null );
-		}
-
-		// Execute generation.
-		$raw_content = $provider->generate( $prompt );
-
-		/**
-		 * Filter generated content before it is saved.
-		 *
-		 * @param string $raw_content Generated text.
-		 * @param string $task_slug   Task identifier.
-		 * @param int    $product_id  Product ID.
-		 */
-		$content = (string) apply_filters( 'aipo_generated_content', $raw_content, $task_slug, $product_id );
-
-		// Cache and persist.
-		$this->cache->set( $cache_key, $content );
-		$this->save_task_result( $product_id, $task_slug, $content );
-
-		// Update generation timestamp.
-		update_post_meta( $product_id, '_ai_optimizer_generated_at', gmdate( 'c' ) );
-		update_post_meta( $product_id, '_ai_optimizer_provider_used', $provider->get_slug() );
-		update_post_meta( $product_id, '_ai_optimizer_model_used', $this->get_model_for_task( $task_slug ) );
-
-		/**
-		 * Fires after a generation task's meta has been saved.
-		 *
-		 * @param int    $product_id  Product ID.
-		 * @param string $task_slug   Task slug.
-		 * @param string $content     Generated content.
-		 */
-		do_action( 'aipo_after_save_meta', $product_id, $task_slug, $content );
-
-		// SEO plugin bridges.
-		if ( 'seo_package' === $task_slug ) {
-			YoastBridge::sync( $product_id );
-			RankMathBridge::sync( $product_id );
-		}
-
-		return array(
-			'provider'    => $provider->get_slug(),
-			'model'       => $this->get_model_for_task( $task_slug ),
-			'tokens_used' => null, // Populated by providers that expose token counts.
-		);
+	public function run_task( int $product_id, string $task_slug ): TaskResult {
+		$task = $this->resolve_task( $task_slug );
+		return $task->run( $product_id );
 	}
 
 	/**
 	 * Run all standard tasks for a product in sequence.
+	 * Skips alt_text unless explicitly included — it requires image URLs.
 	 *
-	 * @param int $product_id Product ID.
-	 * @return void
+	 * @param int      $product_id    Product ID.
+	 * @param string[] $task_slugs    Optional explicit list; defaults to full package.
+	 * @return TaskResult[]           One result per task.
 	 */
-	public function run_full_package( int $product_id ): void {
-		$tasks = array( 'name', 'short_desc', 'long_desc', 'seo_package', 'search_keywords' );
-
-		foreach ( $tasks as $task ) {
-			$this->run_task( $product_id, $task );
+	public function run_package( int $product_id, array $task_slugs = array() ): array {
+		if ( empty( $task_slugs ) ) {
+			$task_slugs = array( 'name', 'short_desc', 'long_desc', 'seo_package', 'search_keywords' );
 		}
+
+		$results = array();
+
+		foreach ( $task_slugs as $slug ) {
+			try {
+				$results[ $slug ] = $this->run_task( $product_id, $slug );
+			} catch ( ProviderException $e ) {
+				// Record failure but continue with remaining tasks.
+				$results[ $slug ] = new TaskResult(
+					task_slug:   $slug,
+					product_id:  $product_id,
+					raw_content: '',
+					provider:    'error',
+				);
+			}
+		}
+
+		// Store the content hash after a successful package run so
+		// subsequent batch passes skip this product until data changes.
+		$hasher = new ContentHasher();
+		$hasher->store( $product_id, $hasher->compute( $product_id ) );
+
+		return $results;
+	}
+
+	/**
+	 * Return all registered task slugs.
+	 *
+	 * @return string[]
+	 */
+	public function get_registered_slugs(): array {
+		return array_keys( $this->get_task_registry() );
+	}
+
+	/**
+	 * Return the task object for a given slug (cached after first resolution).
+	 *
+	 * @param string $task_slug Task slug.
+	 * @return GenerationTaskInterface
+	 * @throws \InvalidArgumentException On unknown slug.
+	 */
+	public function resolve_task( string $task_slug ): GenerationTaskInterface {
+		if ( isset( $this->task_instances[ $task_slug ] ) ) {
+			return $this->task_instances[ $task_slug ];
+		}
+
+		$registry = $this->get_task_registry();
+
+		if ( ! isset( $registry[ $task_slug ] ) ) {
+			throw new \InvalidArgumentException(
+				sprintf( 'Unknown generation task slug: "%s". Registered: %s', $task_slug, implode( ', ', array_keys( $registry ) ) )
+			);
+		}
+
+		$class = $registry[ $task_slug ];
+
+		if ( ! class_exists( $class ) ) {
+			throw new \InvalidArgumentException(
+				sprintf( 'Task class "%s" not found for slug "%s".', $class, $task_slug )
+			);
+		}
+
+		$instance = new $class();
+
+		if ( ! $instance instanceof GenerationTaskInterface ) {
+			throw new \InvalidArgumentException(
+				sprintf( 'Task class "%s" must implement GenerationTaskInterface.', $class )
+			);
+		}
+
+		$this->task_instances[ $task_slug ] = $instance;
+
+		return $instance;
 	}
 
 	// -----------------------------------------------------------------------
@@ -143,70 +162,23 @@ class GenerationOrchestrator {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Persist generated content to the appropriate post meta key(s).
+	 * Return the merged task registry (built-ins + third-party via filter).
 	 *
-	 * For the seo_package task, the content is JSON and is decoded into
-	 * individual meta fields.
-	 *
-	 * @param int    $product_id Product ID.
-	 * @param string $task_slug  Task slug.
-	 * @param string $content    Generated content (plain text or JSON string).
-	 * @return void
+	 * @return array<string, class-string<GenerationTaskInterface>>
 	 */
-	private function save_task_result( int $product_id, string $task_slug, string $content ): void {
+	private function get_task_registry(): array {
 		/**
-		 * Fires before meta is saved.
+		 * Filter the generation task registry.
 		 *
-		 * @param int    $product_id Product ID.
-		 * @param string $task_slug  Task slug.
-		 * @param string $content    Content about to be saved.
+		 * Third-party code can register new tasks or replace built-in ones:
+		 *
+		 *   add_filter( 'aipo_registered_tasks', function( array $tasks ): array {
+		 *       $tasks['my_task'] = \MyPlugin\MyCustomTask::class;
+		 *       return $tasks;
+		 *   } );
+		 *
+		 * @param array<string, class-string<GenerationTaskInterface>> $tasks
 		 */
-		do_action( 'aipo_before_save_meta', $product_id, $task_slug, $content );
-
-		$meta_map = self::TASK_META_MAP[ $task_slug ] ?? null;
-
-		if ( null === $meta_map ) {
-			return;
-		}
-
-		if ( is_string( $meta_map ) ) {
-			// Single meta key.
-			$sanitized = in_array( $task_slug, array( 'long_desc' ), true )
-				? wp_kses_post( $content )
-				: sanitize_text_field( $content );
-
-			update_post_meta( $product_id, $meta_map, $sanitized );
-			return;
-		}
-
-		// seo_package: decode JSON and map to individual keys.
-		$decoded = json_decode( $content, true );
-		if ( ! is_array( $decoded ) ) {
-			$this->logger->error( "seo_package JSON decode failed for product {$product_id}: {$content}" );
-			return;
-		}
-
-		foreach ( $meta_map as $json_key => $meta_key ) {
-			if ( ! isset( $decoded[ $json_key ] ) ) {
-				continue;
-			}
-
-			$value = is_array( $decoded[ $json_key ] )
-				? wp_json_encode( $decoded[ $json_key ] )
-				: sanitize_text_field( (string) $decoded[ $json_key ] );
-
-			update_post_meta( $product_id, $meta_key, $value );
-		}
-	}
-
-	/**
-	 * Return the configured model ID for a given task.
-	 *
-	 * @param string $task_slug Task slug.
-	 * @return string
-	 */
-	private function get_model_for_task( string $task_slug ): string {
-		$task_models = (array) get_option( 'aipo_task_models', array() );
-		return $task_models[ $task_slug ]['model'] ?? 'default';
+		return (array) apply_filters( 'aipo_registered_tasks', self::BUILT_IN_TASKS );
 	}
 }
